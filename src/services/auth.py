@@ -1,4 +1,6 @@
+import configparser
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -10,9 +12,12 @@ from sqlalchemy.orm import Session
 import src.repository.users as repository_users
 from src.database.db import get_db
 
-SECRET_KEY = "16cdc81e4c9c9117d66dceef19cca445"
-ALGORITHM = "HS256"
+file_config = Path(__file__).parent.parent.joinpath('conf/config.ini')
+config = configparser.ConfigParser()
+config.read(file_config)
 
+secret_key = config.get('DB_DEV', 'secret_key')
+algorithm = config.get('DB_DEV', 'algorithm')
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -35,7 +40,7 @@ async def create_access_token(data: dict, expires_delta: Optional[float] = None)
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"iat": datetime.utcnow(), "exp": expire, "scope": "access_token"})
-    encoded_access_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_access_token = jwt.encode(to_encode, secret_key, algorithm=algorithm)
     return encoded_access_token
 
 
@@ -46,7 +51,7 @@ async def create_refresh_token(data: dict, expires_delta: Optional[float] = None
     else:
         expire = datetime.utcnow() + timedelta(days=7)
     to_encode.update({"iat": datetime.utcnow(), "exp": expire, "scope": "refresh_token"})
-    encoded_refresh_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_refresh_token = jwt.encode(to_encode, secret_key, algorithm=algorithm)
     return encoded_refresh_token
 
 
@@ -59,7 +64,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
         if payload.get('scope') == 'access_token':
             email = payload.get("sub")
             if email is None:
@@ -77,7 +82,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
 
 async def decode_refresh_token(refresh_token: str):
     try:
-        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(refresh_token, secret_key, algorithms=[algorithm])
         if payload.get('scope') == 'refresh_token':
             email = payload['sub']
             return email
